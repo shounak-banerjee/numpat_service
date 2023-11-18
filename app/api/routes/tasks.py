@@ -11,8 +11,11 @@ router = APIRouter()
 settings = get_app_settings()
 settings.configure_logging()
 
+@router.get('/ping')
+async def ping():
+    return {"message": "ok"}
 @router.post(
-    "/predict",
+    "/invocations",
     status_code=status.HTTP_201_CREATED,
     response_model=TaskInResponseSchema,
     name="tasks:create-task",

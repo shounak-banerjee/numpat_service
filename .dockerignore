@@ -1,0 +1,47 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg
+*.egg-info/
+dist/
+build/
+*.egg-info/
+*.spec
+requirements_old.txt
+requirements_git.txt
+requirements_frozen.txt
+
+# Logs and databases
+*.log
+*.sql
+*.sqlite
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# VCS directories
+.git/
+.svn/
+
+# Virtual environment
+venv/
+*.venv
+*.virtualenv
+
+# IDE directories
+.idea/
+.vscode/
+
+# Test artifacts
+*.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# Other
+*.bak
+*.swp
+*.pem
+*.sh

@@ -5,11 +5,23 @@ from datasets.dataset_dict import DatasetDict
 from torch.utils.data import DataLoader
 import torch
 import torch.nn as nn
-from transformers import AdamW,get_scheduler,AutoTokenizer,AutoModel,AutoConfig,DataCollatorWithPadding
+from transformers import AdamW,get_scheduler,AutoTokenizer,AutoModel,AutoConfig,DataCollatorWithPadding,BertTokenizer, BertForSequenceClassification
 import json
+import boto3
+import io
 
 tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/paraphrase-mpnet-base-v2')
 tokenizer.model_max_len=512
+
+def load_model_from_s3(bucket_name, model_key,device):
+    s3 = boto3.client('s3',region_name='ap-south-1')
+    obj = s3.get_object(Bucket=bucket_name, Key=model_key)
+    model_bytes = obj['Body'].read()
+   
+    # Load the model directly from bytes
+    model = torch.load(io.BytesIO(model_bytes),map_location=device)
+    model.eval()  # Set the model to evaluation mode if it's a neural network
+    return model
 
 def preprocess_function(examples):
     return tokenizer(examples["text1"],examples["text2"], truncation=True)
@@ -28,10 +40,37 @@ def mean_pool(token_embeds, attention_mask):
     )
     return pool
 
+def qnli_inference(question, passage):
+    model_name_qnli = "gchhablani/bert-base-cased-finetuned-qnli"  # You can replace this with a model fine-tuned on QNLI if you have one.
+    tokenizer_qnli = BertTokenizer.from_pretrained(model_name_qnli)
+    model_qnli = BertForSequenceClassification.from_pretrained(model_name_qnli)  # Replace with a fine-tuned model if available
+    inputs = tokenizer_qnli(question, passage, return_tensors="pt", truncation=True, padding=True, max_length=512)
+    model_qnli.eval()
+    with torch.no_grad():
+        outputs = model_qnli(**inputs)
+        print(outputs)
+        logits = outputs.logits
+        probabilities = torch.nn.functional.softmax(logits, dim=1)
+        print(probabilities[0])
+        pred_label = torch.argmax(probabilities, dim=1).item()
+    if((probabilities[0][1])>0.95):
+      return False
+    else:
+      return True
+
 def trained_embeddings_predictions(tokenized_data,data_collator,skill):
-    device=torch.device('cpu')
     print(skill)
-    model=torch.load('/mnt/transformers_backend/transformers_backend/trained_embeddings_inference/models/latest_models/'+skill+'.pt',map_location=device)
+    device=torch.device('cpu')
+    try:
+        try:
+            print("Sagemaker inference")
+            model=torch.load('ml/model/'+skill+'.pt',map_location=device)
+        except:
+            print("s3_inference")
+            model = load_model_from_s3('numpat-models', skill+'.pt',device)
+    except:
+        raise Exception("Could not load model from local or s3.")
+        
     test_dataloader = DataLoader(
         tokenized_data["test"], batch_size=1, collate_fn=data_collator
     )
@@ -58,19 +97,21 @@ def trained_embeddings_predictions(tokenized_data,data_collator,skill):
 
 async def predict_skills(skills,X_test):
     predictions={}
-    # d = {'test':Dataset.from_dict({'text1':[ex[0] for ex in X_test],'text2':[ex[1] for ex in X_test]})}
-    # d =DatasetDict(d)
-    # tokenized_data = d.map(preprocess_function, batched=True)
-    # tokenized_data.set_format("torch",columns=["input_ids", "attention_mask"])
-    # data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
-#     eval_dataloader = DataLoader(
-#     tokenized_data["test"], batch_size=30, collate_fn=data_collator
-# )
+    relevancy_array=[]
+    for question_answer_pair in X_test:
+        if(qnli_inference(question_answer_pair[0], question_answer_pair[1])):
+            relevancy_array.append(1)
+        else:
+            relevancy_array.append(0)
+            
     for skill in skills:
         if(skill in ["Communication","Collaboration"]):
             print("INSIDE ANSWER ONLY")
             d = {'test':Dataset.from_dict({'text1':[ex[1] for ex in X_test]})}
             d =DatasetDict(d)
+
+
+            
             tokenized_data = d.map(preprocess_function_answer_only, batched=True)
             tokenized_data.set_format("torch",columns=["input_ids", "attention_mask"])
             data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
@@ -82,5 +123,6 @@ async def predict_skills(skills,X_test):
             data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
             
         predictions[skill]=trained_embeddings_predictions(tokenized_data,data_collator,skill)
-    
+        for _ in range(len(predictions[skill])):
+            predictions[skill][_]*=relevancy_array[_]
     return predictions

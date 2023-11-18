@@ -16,7 +16,7 @@ class AppSettings(BaseAppSettings):
     openapi_url: str = "/openapi.json"
     redoc_url: str = "/redoc"
     title: str = "Numpat Backend"
-    version: str = "0.0.0"
+    version: str = "0.0.0.0"
 
     database_url: PostgresDsn
     async_database_url: PostgresDsn
