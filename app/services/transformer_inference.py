@@ -58,6 +58,41 @@ def qnli_inference(question, passage):
     else:
       return True
 
+def get_preprocessed_data(model,tokenizer, dataset, skill):
+    # dataset = datasets.load_dataset("samsum", split=split)
+
+    prompt = (
+        f"Given the question and it's answer, determine if the {skill} skill is present in the answer. :\n Question: {{question}} \nAnswer:{{answer}} \---{skill}:"
+    )
+
+    print(prompt)
+
+    def apply_prompt_template(sample):
+        return {
+            "text": prompt.format(
+                question=sample["question"],
+                answer=sample["answer"],
+                skill=skill,
+                eos_token=tokenizer.eos_token,
+            )
+        }
+
+    dataset = dataset.map(apply_prompt_template, remove_columns=list(dataset.features))
+    # print("ddd",dataset["text"])
+    answers=[]
+    for x,prompt in enumerate(dataset["text"]):
+        model_input=tokenizer(prompt, return_tensors="pt").to("cuda")
+        model.eval()
+        with torch.no_grad():
+            answers.append(tokenizer.decode(model.generate(**model_input, max_new_tokens=100)[0], skip_special_tokens=True))
+    pred=[]
+    for _,answer in enumerate(answers):
+        if ("not present" in answer.lower()) or ("no" in answer.lower()) or ("0" in answer.lower()):
+            pred.append(0)
+        else:
+            pred.append(1)
+    return pred
+
 def trained_embeddings_predictions(tokenized_data,data_collator,skill):
     print(skill)
     device=torch.device('cpu')
@@ -95,34 +130,43 @@ def trained_embeddings_predictions(tokenized_data,data_collator,skill):
     flat_list = [list(x.cpu().numpy()) for xs in conf for x in xs]
     return p
 
-async def predict_skills(skills,X_test):
+async def predict_skills(skills,X_test,llama_model,llama_tokenizer):
     predictions={}
     relevancy_array=[]
+    questions=[]
+    answers=[]
     for question_answer_pair in X_test:
+        questions.append(question_answer_pair[0])
+        answers.append(question_answer_pair[1])
         if(qnli_inference(question_answer_pair[0], question_answer_pair[1])):
             relevancy_array.append(1)
         else:
             relevancy_array.append(0)
             
+    data = [{"question": question, "answer": answer} for question, answer in zip(questions, answers)]
+
+    # Create a dataset from the combined data
+    dataset = Dataset.from_dict({"question": [item["question"] for item in data], "answer": [item["answer"] for item in data]})
     for skill in skills:
-        if(skill in ["Communication","Collaboration"]):
-            print("INSIDE ANSWER ONLY")
-            d = {'test':Dataset.from_dict({'text1':[ex[1] for ex in X_test]})}
-            d =DatasetDict(d)
+        # if(skill in ["Communication","Collaboration"]):
+        #     print("INSIDE ANSWER ONLY")
+        #     d = {'test':Dataset.from_dict({'text1':[ex[1] for ex in X_test]})}
+        #     d =DatasetDict(d)
 
 
             
-            tokenized_data = d.map(preprocess_function_answer_only, batched=True)
-            tokenized_data.set_format("torch",columns=["input_ids", "attention_mask"])
-            data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
-        else:
-            d = {'test':Dataset.from_dict({'text1':[ex[0] for ex in X_test],'text2':[ex[1] for ex in X_test]})}
-            d =DatasetDict(d)
-            tokenized_data = d.map(preprocess_function, batched=True)
-            tokenized_data.set_format("torch",columns=["input_ids", "attention_mask"])
-            data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
-            
-        predictions[skill]=trained_embeddings_predictions(tokenized_data,data_collator,skill)
+        #     tokenized_data = d.map(preprocess_function_answer_only, batched=True)
+        #     tokenized_data.set_format("torch",columns=["input_ids", "attention_mask"])
+        #     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+        # else:
+        #     d = {'test':Dataset.from_dict({'text1':[ex[0] for ex in X_test],'text2':[ex[1] for ex in X_test]})}
+        #     d =DatasetDict(d)
+        #     tokenized_data = d.map(preprocess_function, batched=True)
+        #     tokenized_data.set_format("torch",columns=["input_ids", "attention_mask"])
+        #     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+        
+        # predictions[skill]=trained_embeddings_predictions(tokenized_data,data_collator,skill)
+        predictions[skill]=get_preprocessed_data(llama_model,llama_tokenizer, dataset, skill)
         for _ in range(len(predictions[skill])):
             predictions[skill][_]*=relevancy_array[_]
     return predictions
