@@ -84,7 +84,8 @@ def get_preprocessed_data(model,tokenizer, dataset, skill):
         model_input=tokenizer(prompt, return_tensors="pt").to("cuda")
         model.eval()
         with torch.no_grad():
-            answers.append(tokenizer.decode(model.generate(**model_input, max_new_tokens=100)[0], skip_special_tokens=True))
+            model_generation=model.generate(**model_input, max_new_tokens=100)[0]
+            answers.append(tokenizer.decode(model_generation, skip_special_tokens=True))
     pred=[]
     for _,answer in enumerate(answers):
         if ("not present" in answer.lower()) or ("no" in answer.lower()) or ("0" in answer.lower()):
@@ -166,7 +167,7 @@ async def predict_skills(skills,X_test,llama_model,llama_tokenizer):
         #     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
         
         # predictions[skill]=trained_embeddings_predictions(tokenized_data,data_collator,skill)
-        predictions[skill]=get_preprocessed_data(llama_model,llama_tokenizer, dataset, skill)
+        predictions[skill]=get_preprocessed_data(llama_model[skill],llama_tokenizer, dataset, skill)
         for _ in range(len(predictions[skill])):
             predictions[skill][_]*=relevancy_array[_]
     return predictions

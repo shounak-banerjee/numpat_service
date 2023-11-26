@@ -30,9 +30,9 @@ session = boto3.Session(
 
 # Create a SageMaker client using the session
 sagemaker_client = session.client("sagemaker")
-model_name = "lnd-model"
+model_name = "lnc-model"
 # 1. Create an endpoint configuration
-endpoint_config_name = "lnd-model-endpointconfig-5g"
+endpoint_config_name = "lnd-model-endpointconfig-provisioned"
 
 # response = sagemaker_client.create_endpoint_config(
 #     EndpointConfigName=endpoint_config_name,
@@ -67,7 +67,7 @@ endpoint_config_name = "lnd-model-endpointconfig-5g"
 
 # 2. Create an endpoint using the endpoint configuration
 # endpoint_name = "lnd-model-provisioned-endpoint"
-endpoint_name = "lnd-model-5-g-endpoint"
+endpoint_name = "lnc-provisioned-endpoint"
 
 response = sagemaker_client.create_endpoint(
     EndpointName=endpoint_name,

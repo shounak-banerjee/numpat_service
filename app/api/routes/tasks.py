@@ -40,14 +40,21 @@ def load_model(model_name, quantization):
     #     )
     return model
 
-model_id="/mnt/llama_finetune/model"
-model_peft="/mnt/llama_finetune/Leadership_and_Responsibility"
-model_id_tok="/mnt/llama_finetune/model"
+models_dict={}
+# model_id="/mnt/llama_finetune/model"
+# model_id_tok="/mnt/llama_finetune/model"
+model_id="ml/model/model"
+model_id_tok="ml/model/model"
+
 llama_tokenizer = LlamaTokenizer.from_pretrained(model_id_tok)
 # model =LlamaForCausalLM.from_pretrained(model_id, load_in_8bit=True, device_map='auto', torch_dtype=torch.float16)
 quantization=False
 model = load_model(model_id, quantization)
-llama_model = load_peft_model(model, model_peft)
+skills=["Leadership and Responsibility","Initiative and Self-Direction","Productivity and Accountability","Social and Cross-Cultural Skills"]
+for skill in skills:
+    # model_peft="/mnt/llama_finetune/"+skill.replace(" ","_")
+    model_peft="ml/model/"+skill.replace(" ","_")
+    models_dict[skill] = load_peft_model(model, model_peft).to("cuda")
 
 @router.get('/ping')
 async def ping():
@@ -67,7 +74,7 @@ async def skill_tag(
         dimension=task_create.dimension,
         skills=task_create.skills,
         X_test=task_create.X_test,
-        llama_model=llama_model,
+        llama_model=models_dict,
         llama_tokenizer=llama_tokenizer
     )
 
