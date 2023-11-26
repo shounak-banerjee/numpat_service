@@ -1,5 +1,5 @@
 # # Specify the ECR image URI for your custom container
-ecr_image_uri = "046750509865.dkr.ecr.ap-south-1.amazonaws.com/numpat_service:latest"
+ecr_image_uri = "046750509865.dkr.ecr.ap-south-1.amazonaws.com/jozuna_lnc"
 
 # # Create model
 # model_name = "collaboration_model"
@@ -41,14 +41,14 @@ session = boto3.Session(
 sagemaker_client = session.client("sagemaker")
 
 # Get model from S3
-model_url = "s3://numpat-transformer-models/learning_and_development.tar.gz"
+model_url = "s3://numpat-lnc-models/llama_models.tar.gz"
 
 # # Get container image (prebuilt example)
 # from sagemaker import image_uris
 # container = image_uris.retrieve("xgboost", region, "0.90-1")
 
 # Create model
-model_name = "learning-and-development-model"
+model_name = "lnc-model"
 
 response = sagemaker_client.create_model(
     ModelName=model_name,
