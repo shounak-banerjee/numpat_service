@@ -10,8 +10,7 @@ import json
 import boto3
 import io
 
-tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/paraphrase-mpnet-base-v2')
-tokenizer.model_max_len=512
+global tokenizer
 
 def load_model_from_s3(bucket_name, model_key,device):
     s3 = boto3.client('s3',region_name='ap-south-1')
@@ -23,9 +22,9 @@ def load_model_from_s3(bucket_name, model_key,device):
     model.eval()  # Set the model to evaluation mode if it's a neural network
     return model
 
-def preprocess_function(examples):
+def preprocess_function(examples, tokenizer):
     return tokenizer(examples["text1"],examples["text2"], truncation=True)
-def preprocess_function_answer_only(examples):
+def preprocess_function_answer_only(examples, tokenizer):
     return tokenizer(examples["text1"], truncation=True)
 
 # define mean pooling function
@@ -40,10 +39,7 @@ def mean_pool(token_embeds, attention_mask):
     )
     return pool
 
-def qnli_inference(question, passage):
-    model_name_qnli = "gchhablani/bert-base-cased-finetuned-qnli"  # You can replace this with a model fine-tuned on QNLI if you have one.
-    tokenizer_qnli = BertTokenizer.from_pretrained(model_name_qnli)
-    model_qnli = BertForSequenceClassification.from_pretrained(model_name_qnli)  # Replace with a fine-tuned model if available
+def qnli_inference(question, passage,model_qnli,tokenizer_qnli):
     inputs = tokenizer_qnli(question, passage, return_tensors="pt", truncation=True, padding=True, max_length=512)
     model_qnli.eval()
     with torch.no_grad():
@@ -106,12 +102,13 @@ def trained_embeddings_predictions(tokenized_data,data_collator,skill):
             model = load_model_from_s3('numpat-models', skill+'.pt',device)
     except:
         raise Exception("Could not load model from local or s3.")
-        
+   
     test_dataloader = DataLoader(
         tokenized_data["test"], batch_size=1, collate_fn=data_collator
     )
     conf=[]
     p=[]
+    device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
     for batch in test_dataloader:
         batch = {k: v.to(device) for k, v in batch.items()}
         # print("batch",batch)
@@ -153,9 +150,6 @@ async def predict_skills(skills,X_test,llama_model,llama_tokenizer):
         #     print("INSIDE ANSWER ONLY")
         #     d = {'test':Dataset.from_dict({'text1':[ex[1] for ex in X_test]})}
         #     d =DatasetDict(d)
-
-
-            
         #     tokenized_data = d.map(preprocess_function_answer_only, batched=True)
         #     tokenized_data.set_format("torch",columns=["input_ids", "attention_mask"])
         #     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
